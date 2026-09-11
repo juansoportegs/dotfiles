@@ -1,0 +1,53 @@
+DOTFILES - BACKUP & RESTORE WORKFLOW
+====================================
+Repo: https://github.com/juansoportegs/dotfiles
+
+
+A) DAILY - BACK UP CHANGES
+--------------------------
+After editing any config or adding files:
+
+  ~/dotfiles/push.sh
+
+Whenever you install or remove a program, refresh the package list:
+
+  pacman -Qeq > ~/dotfiles/packages.txt && ~/dotfiles/push.sh
+
+
+B) FRESH INSTALL - RECOVERY
+----------------------------
+1. Clone the repo:
+     git clone https://github.com/juansoportegs/dotfiles.git
+     cd dotfiles
+
+2. Restore everything (configs + optionally install yay & all packages):
+     ./install.sh        # answer "y" when it asks about packages
+
+3. Restore oh-my-zsh:
+     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
+4. Set git identity (once, so push.sh works):
+     git config --global user.name "juansoportegs"
+     git config --global user.email "juan.soporte@gscontrol.es"
+
+5. Manual one-time bits the script cannot do:
+     - Add CachyOS/Chaotic repos to /etc/pacman.conf
+       (needed for auto-cpufreq / gaming packages)
+     - Generate a new SSH key and add it to GitHub:
+         ssh-keygen -t ed25519
+     - Re-add your SSH remmina connections (passwords live in
+       ~/.local/share/remmina, intentionally not in this repo)
+
+After log out/in, hyprland, waybar, themes, scripts and wallpapers
+are live. Any changes afterwards follow workflow A.
+
+
+NOTES / WHAT IS NOT BACKED UP
+-----------------------------
+- Secrets (.ssh, .gnupg, remmina passwords) - intentionally excluded,
+  this repo is public.
+- /etc system files (pacman repo order, GRUB, etc.)
+- App data (browsers, Steam, wine, app downloads in ~/.local/share)
+- ~/.oh-my-zsh itself (reinstalled fresh, only your .zshrc is backed up)
+- ~/Pictures/Screenshots and loose PNGs (only the wallpapers/ folder
+  used by cycle-wallpapers.sh is backed up)
