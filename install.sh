@@ -23,6 +23,8 @@ link_one "$REPO/.config/VSCodium/User/snippets" "$HOME/.config/VSCodium/User/sni
 link_one "$REPO/.local/bin/cliphist-rofi-img" "$HOME/.local/bin/cliphist-rofi-img"
 link_one "$REPO/.local/bin/emoji-picker" "$HOME/.local/bin/emoji-picker"
 
+link_one "$REPO/Pictures/wallpapers" "$HOME/Pictures/wallpapers"
+
 for f in .zshrc .zshrc.pre-oh-my-zsh .bashrc .bash_profile .gtkrc-2.0 update-system.sh; do
     link_one "$REPO/$f" "$HOME/$f"
 done
