@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+import re
+import subprocess
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk
+
+GLib.set_prgname("emoji-picker")
+GLib.set_application_name("emoji-picker")
+
+from picker.file_loader import read_characters_from_files
+
+CSS = b"""
+window {
+    background-color: #1a1b26;
+    color: #c0caf5;
+    border-radius: 12px;
+}
+#sidebar-box {
+    background-color: #16161e;
+}
+.sidebar-widget {
+    background: transparent;
+    border-radius: 8px;
+}
+.sidebar-widget:selected {
+    background-color: #2a2f4a;
+}
+.sidebar-widget:hover {
+    background-color: #1f2335;
+}
+.cat-icon {
+    font-family: "Noto Color Emoji";
+    font-size: 24px;
+    padding: 4px 10px;
+}
+button.emoji-btn {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    box-shadow: none;
+    padding: 2px;
+}
+button.emoji-btn:hover { background-color: #2c3050; }
+button.emoji-btn:focus { background-color: #3b4261; }
+.emoji-label {
+    font-family: "Noto Color Emoji";
+    font-size: 30px;
+    padding: 2px;
+}
+.group-title {
+    color: #565f89;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-left: 12px;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
+.no-results { color: #565f89; font-size: 13px; }
+entry {
+    background-color: #16161e;
+    border: 1px solid #3b4261;
+    border-radius: 8px;
+    color: #c0caf5;
+    caret-color: #7aa2f7;
+    padding: 5px 10px;
+}
+"""
+
+
+def add_class(widget, name):
+    widget.get_style_context().add_class(name)
+
+
+CATEGORIES = [
+    ("\U0001F50D", "Todos", None),
+    ("\U0001F604", "Emoticonos", "emojis_smileys_emotion"),
+    ("\U0001F64B", "Personas y gestos", "emojis_people_body"),
+    ("\U0001F431", "Animales y naturaleza", "emojis_animals_nature"),
+    ("\U0001F355", "Comida y bebida", "emojis_food_drink"),
+    ("\u26BD", "Actividades", "emojis_activities"),
+    ("\u2708\uFE0F", "Viajes y lugares", "emojis_travel_places"),
+    ("\U0001F4A1", "Objetos", "emojis_objects"),
+    ("\U0001F523", "S\u00EDmbolos", "emojis_symbols"),
+    ("\U0001F3F4", "Banderas", "emojis_flags"),
+]
+
+TAG_RE = re.compile(r"<[^>]+>")
+
+
+def strip_tags(text):
+    return TAG_RE.sub("", text)
+
+
+class EmojiPicker(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="Emoji")
+        self.set_icon_name("emoji-picker")
+        self.set_default_size(760, 480)
+        self.selected_cat = 0
+        self._debounced_id = None
+
+        self.categories = []
+        for icon, name, filename in CATEGORIES:
+            entries = []
+            if filename:
+                for entry in read_characters_from_files([filename], [], True):
+                    if entry.description:
+                        entries.append(entry)
+            self.categories.append((icon, name, filename, entries))
+
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        self._build_ui()
+        self.connect("key-press-event", self.on_key)
+        self._make_sidebar_rows()
+        self._populate()
+        self.show_all()
+        self.search.grab_focus()
+
+    def _build_ui(self):
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.add(outer)
+
+        self.search = Gtk.SearchEntry()
+        self.search.set_placeholder_text("Buscar emoji...")
+        self.search.set_hexpand(True)
+        self.search.margin_start = 10
+        self.search.margin_top = 10
+        self.search.margin_end = 10
+        self.search.margin_bottom = 8
+        self.search.connect("search-changed", lambda _e: self._schedule_populate())
+        outer.pack_start(self.search, False, False, 0)
+
+        main = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        outer.pack_start(main, True, True, 0)
+
+        self.sidebar = Gtk.ListBox()
+        self.sidebar.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.sidebar.set_size_request(72, -1)
+        self.sidebar.set_name("sidebar-box")
+        self.sidebar.connect("row-selected", self.on_category_selected)
+        main.pack_start(self.sidebar, False, False, 0)
+
+        self.scrolled = Gtk.ScrolledWindow()
+        self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scrolled.set_vexpand(True)
+        main.pack_start(self.scrolled, True, True, 0)
+
+        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.content.margin_bottom = 10
+        self.scrolled.add(self.content)
+
+    def _make_sidebar_rows(self):
+        for icon, name, _, entries in self.categories:
+            row = Gtk.ListBoxRow()
+            add_class(row, "sidebar-widget")
+            row.set_tooltip_text(name)
+            ic = Gtk.Label(label=icon)
+            add_class(ic, "cat-icon")
+            row.add(ic)
+            self.sidebar.add(row)
+
+        self.sidebar.select_row(self.sidebar.get_row_at_index(0))
+
+    def on_category_selected(self, _listbox, row):
+        if row is None:
+            return
+        self.selected_cat = row.get_index()
+        self._populate()
+
+    def _schedule_populate(self):
+        if self._debounced_id is not None:
+            GLib.source_remove(self._debounced_id)
+        self._debounced_id = GLib.idle_add(self._populate)
+
+    def _populate(self):
+        self._debounced_id = None
+        query = strip_tags(self.search.get_text()).lower()
+        tokens = [t for t in query.split()]
+        cat_idx = self.selected_cat
+        indices = list(range(1, len(self.categories))) if cat_idx == 0 else [cat_idx]
+
+        groups = []
+        for i in indices:
+            matches = []
+            for entry in self.categories[i][3]:
+                text = strip_tags(entry.description).lower()
+                if all(t in text for t in tokens):
+                    matches.append(entry)
+            if matches:
+                groups.append((self.categories[i][0], self.categories[i][1], matches))
+
+        for child in list(self.content.get_children()):
+            self.content.remove(child)
+
+        if not groups:
+            lbl = Gtk.Label(label="No hay resultados")
+            add_class(lbl, "no-results")
+            self.content.pack_start(lbl, True, True, 0)
+        else:
+            for icon, name, matches in groups:
+                header = Gtk.Label(
+                    label=f"{icon}  {name.upper()}  ·  {len(matches)}", xalign=0.0
+                )
+                add_class(header, "group-title")
+                self.content.pack_start(header, False, False, 0)
+
+                flow = Gtk.FlowBox()
+                add_class(flow, "emoji-box")
+                flow.set_homogeneous(True)
+                flow.set_selection_mode(Gtk.SelectionMode.NONE)
+                flow.margin_start = 8
+                flow.margin_end = 8
+                flow.set_min_children_per_line(6)
+                for entry in matches:
+                    btn = Gtk.Button()
+                    add_class(btn, "emoji-btn")
+                    lbl = Gtk.Label(label=entry.character)
+                    add_class(lbl, "emoji-label")
+                    btn.add(lbl)
+                    btn.set_tooltip_text(strip_tags(entry.description))
+                    btn.connect("clicked", self.on_emoji_clicked, entry.character)
+                    flow.add(btn)
+                self.content.pack_start(flow, False, False, 0)
+
+        self.content.show_all()
+
+    def on_emoji_clicked(self, _btn, char):
+        self._copy_and_close(char)
+
+    def _copy_and_close(self, char):
+        try:
+            subprocess.run(["wl-copy"], input=char.encode("utf-8"), check=True)
+        except Exception as exc:
+            print(f"wl-copy error: {exc}", flush=True)
+        Gtk.main_quit()
+
+    def on_key(self, _win, ev):
+        if ev.keyval == Gdk.KEY_Escape:
+            Gtk.main_quit()
+        return False
+
+
+def main():
+    EmojiPicker()
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

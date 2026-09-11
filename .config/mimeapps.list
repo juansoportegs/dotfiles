@@ -1,0 +1,20 @@
+[Added Associations]
+inode/directory=thunar.desktop;
+application/x-shellscript=codium.desktop;
+x-scheme-handler/tg=userapp-AyuGram Desktop-386LQ3.desktop;
+x-scheme-handler/tonsite=userapp-AyuGram Desktop-QA8LQ3.desktop;
+video/mp4=mpv.desktop;
+image/png=imv.desktop;
+image/jpeg=imv.desktop;
+
+[Default Applications]
+inode/directory=thunar.desktop
+x-scheme-handler/tg=userapp-AyuGram Desktop-386LQ3.desktop
+x-scheme-handler/tonsite=userapp-AyuGram Desktop-QA8LQ3.desktop
+x-scheme-handler/discord=vesktop.desktop
+application/pdf=okularApplication_pdf.desktop
+video/mp4=mpv.desktop
+image/png=imv.desktop
+image/jpeg=imv.desktop
+video/vnd.radgamettools.bink=mpv.desktop
+x-scheme-handler/webcal=brave-origin.desktop
