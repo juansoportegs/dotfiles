@@ -1,0 +1,11 @@
+configuration {
+  modi: "drun,clipboard:/home/user0/.local/bin/cliphist-rofi-img";
+  show-icons: true;
+  matching: "fuzzy";
+  sort: true;
+
+  display-drun: "";
+}
+
+//@theme "~/.config/rofi/themes/tokyonight.rasi"
+@theme "/home/user0/.config/rofi/themes/tokyonight.rasi"

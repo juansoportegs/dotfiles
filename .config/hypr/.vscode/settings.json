@@ -1,0 +1,13 @@
+{
+  "Lua.workspace.library": [
+    "/usr/share/hypr/stubs"
+  ],
+  "Lua.diagnostics.globals": [
+    "terminal",
+    "fileManager",
+    "menu",
+    "browser",
+    "telegram",
+    "whatsapp"
+  ]
+}

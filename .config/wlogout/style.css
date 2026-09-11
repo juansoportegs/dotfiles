@@ -1,0 +1,45 @@
+* {
+    background-image: none;
+    box-shadow: none;
+}
+
+window {
+    background-color: transparent;
+}
+
+button {
+    border-radius: 6px;
+    border-color: #3b4261;
+    text-decoration-color: #c0caf5;
+    color: #c0caf5;
+    background-color: #24283b;
+    border-style: solid;
+    border-width: 1px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 22px;
+    font-size: 0;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    margin: 4px;
+}
+
+button:focus, button:active, button:hover {
+    background-color: #1f2335;
+    border-color: #7aa2f7;
+    outline-style: none;
+    color: #7aa2f7;
+}
+
+#logout {
+    background-image: image(url("/usr/share/wlogout/icons/logout.png"));
+}
+
+#shutdown {
+    background-image: image(url("/usr/share/wlogout/icons/shutdown.png"));
+}
+
+#reboot {
+    background-image: image(url("/usr/share/wlogout/icons/reboot.png"));
+}
