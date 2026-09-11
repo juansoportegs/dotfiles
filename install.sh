@@ -1,6 +1,7 @@
 #!/bin/sh
 # Fresh-install helper: after `git clone` this repo to ~/dotfiles,
 # run this to symlink every config back into $HOME.
+# Optionally: install yay and reinstall all packages from packages.txt.
 set -e
 REPO="$HOME/dotfiles"
 
@@ -29,4 +30,26 @@ for f in .zshrc .zshrc.pre-oh-my-zsh .bashrc .bash_profile .gtkrc-2.0 update-sys
     link_one "$REPO/$f" "$HOME/$f"
 done
 
-echo "Done. Configs linked from $REPO."
+echo "Configs linked from $REPO."
+
+echo
+read -r -p "Install yay + all packages from packages.txt? [y/N] " ans
+case "$ans" in
+    y|Y|yes)
+        if ! command -v yay >/dev/null 2>&1; then
+            echo "Installing yay..."
+            if ! command -v makepkg >/dev/null 2>&1; then
+                sudo pacman -S --needed --noconfirm base-devel git
+            fi
+            git clone https://aur.archlinux.org/yay.git /tmp/yay
+            (cd /tmp/yay && makepkg -si --noconfirm)
+        else
+            echo "yay already installed."
+        fi
+        echo "Installing packages from packages.txt (--needed)..."
+        yay -S --needed --noconfirm $(cat "$REPO/packages.txt")
+        ;;
+    *)
+        echo "Skipped package install."
+        ;;
+esac
