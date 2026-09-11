@@ -20,8 +20,18 @@ B) FRESH INSTALL - RECOVERY
      git clone https://github.com/juansoportegs/dotfiles.git
      cd dotfiles
 
-2. Restore everything (configs + optionally install yay & all packages):
-     ./install.sh        # answer "y" when it asks about packages
+2. Restore everything:
+   - configs only (also safe to re-run any time):
+       ./install.sh
+   - full setup on a FRESH system (configs + yay + all packages):
+       ./install.sh --full
+   - packages only:
+       ./install.sh --packages
+     NOTE: never run --full/--packages twice on an existing system -
+     it re-resolves every package against repo priority and can
+     downgrade Chaotic-AUR/CachyOS builds to stock Arch versions.
+     Refresh the list after any install/remove:
+       pacman -Qeq > ~/dotfiles/packages.txt && ~/dotfiles/push.sh
 
 3. Restore oh-my-zsh:
      sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"

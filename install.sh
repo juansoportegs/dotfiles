@@ -1,9 +1,30 @@
 #!/bin/sh
 # Fresh-install helper: after `git clone` this repo to ~/dotfiles,
 # run this to symlink every config back into $HOME.
-# Optionally: install yay and reinstall all packages from packages.txt.
+#
+# Usage:
+#   ./install.sh             # symlink configs only (safe, no-op if re-run)
+#   ./install.sh --full      # symlink configs + install yay + all packages
+#   ./install.sh --packages  # package step only (yay + packages.txt)
+#
+# NOTE: --full/--packages are for a FRESH system. On an existing install
+# the package step re-resolves every package against repo priority, which
+# downgrades Chaotic-AUR (-1.1 pkgrel) and CachyOS builds to stock Arch.
 set -e
 REPO="$HOME/dotfiles"
+
+DO_SYMLINK=0
+DO_PACKAGES=0
+if [ "$#" -eq 0 ]; then
+    DO_SYMLINK=1
+fi
+for arg in "$@"; do
+    case "$arg" in
+        --full) DO_SYMLINK=1; DO_PACKAGES=1 ;;
+        --packages) DO_PACKAGES=1 ;;
+        *) echo "Unknown option: $arg (use --full or --packages)" >&2; exit 1 ;;
+    esac
+done
 
 link_one() {
     src="$1"
@@ -13,6 +34,7 @@ link_one() {
     ln -s "$src" "$dst"
 }
 
+if [ "$DO_SYMLINK" -eq 1 ]; then
 for d in hypr waybar kitty rofi rofimoji Thunar dunst wlogout fastfetch btop gtk-3.0 gtk-4.0 qt5ct qt6ct nwg-look autostart; do
     link_one "$REPO/.config/$d" "$HOME/.config/$d"
 done
@@ -31,25 +53,20 @@ for f in .zshrc .zshrc.pre-oh-my-zsh .bashrc .bash_profile .gtkrc-2.0 update-sys
 done
 
 echo "Configs linked from $REPO."
+fi
 
-echo
-read -r -p "Install yay + all packages from packages.txt? [y/N] " ans
-case "$ans" in
-    y|Y|yes)
-        if ! command -v yay >/dev/null 2>&1; then
-            echo "Installing yay..."
-            if ! command -v makepkg >/dev/null 2>&1; then
-                sudo pacman -S --needed --noconfirm base-devel git
-            fi
-            git clone https://aur.archlinux.org/yay.git /tmp/yay
-            (cd /tmp/yay && makepkg -si --noconfirm)
-        else
-            echo "yay already installed."
+if [ "$DO_PACKAGES" -eq 1 ]; then
+    echo "Installing packages (fresh-system mode)..."
+    if ! command -v yay >/dev/null 2>&1; then
+        echo "Installing yay..."
+        if ! command -v makepkg >/dev/null 2>&1; then
+            sudo pacman -S --needed --noconfirm base-devel git
         fi
-        echo "Installing packages from packages.txt (--needed)..."
-        yay -S --needed --noconfirm $(cat "$REPO/packages.txt")
-        ;;
-    *)
-        echo "Skipped package install."
-        ;;
-esac
+        git clone https://aur.archlinux.org/yay.git /tmp/yay
+        (cd /tmp/yay && makepkg -si --noconfirm)
+    else
+        echo "yay already installed."
+    fi
+    echo "Installing packages from packages.txt (--needed)..."
+    yay -S --needed --noconfirm $(cat "$REPO/packages.txt")
+fi
