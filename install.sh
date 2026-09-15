@@ -10,6 +10,9 @@
 # NOTE: --full/--packages are for a FRESH system. On an existing install
 # the package step re-resolves every package against repo priority, which
 # downgrades Chaotic-AUR (-1.1 pkgrel) and CachyOS builds to stock Arch.
+# Package restore is two-phase: repo packages first via pacman, then AUR
+# packages one-by-one, so a single failing AUR build cannot leave your
+# whole desktop (hyprland, waybar, zsh, ...) uninstalled.
 set -e
 REPO="$HOME/dotfiles"
 
@@ -129,25 +132,35 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
         done
     done
 
-    # Main pass with retries: if pacman reports "X and Y are in conflict.
-    # Remove Y?", remove exactly what it suggests and retry. Catches
-    # dependency-level conflicts (e.g. steam pulling lib32-mesa-git).
-    echo "> Installing packages.txt (--needed)..."
+    # Classify targets: repo packages (binary, reliable) vs AUR-only.
+    repo_pkgs=""
+    aur_pkgs=""
+    while read -r p; do
+        [ -z "$p" ] && continue
+        if pacman -Si "$p" >/dev/null 2>&1; then
+            repo_pkgs="$repo_pkgs $p"
+        else
+            aur_pkgs="$aur_pkgs $p"
+        fi
+    done < "$REPO/packages.txt"
+    echo "  binary repo packages: $(echo $repo_pkgs | wc -w) | AUR packages: $(echo $aur_pkgs | wc -w)"
+
+    # Repo phase (uses plain pacman so a single broken AUR package cannot
+    # abort the whole transaction and leave waybar/hyprland/zsh uninstalled).
+    echo "> Installing repo packages (--needed)..."
     attempts=0
     while :; do
         attempts=$((attempts + 1))
-        echo "  attempt $attempts..."
-        out=$(yay -S --needed --noconfirm $(cat "$REPO/packages.txt") 2>&1)
+        out=$(sudo pacman -S --needed --noconfirm $repo_pkgs 2>&1)
         rc=$?
         if [ "$rc" -eq 0 ]; then
-            echo "$out" | tail -5
-            echo "  all packages satisfied."
+            echo "  all repo packages installed."
             break
         fi
         echo "$out" | tail -25
         to_remove=$(printf '%s\n' "$out" | grep -oE 'Remove [^?]+' | awk '{print $2}' | sort -u)
         if [ -z "$to_remove" ] || [ "$attempts" -ge 6 ]; then
-            echo "  Cannot auto-resolve (no pacman-suggested removal). Fix manually." >&2
+            echo "  Repo install failed and cannot auto-resolve. See output above." >&2
             exit 1
         fi
         for r in $to_remove; do
@@ -156,5 +169,15 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
                 sudo pacman -Rdd --noconfirm "$r" || true
             fi
         done
+    done
+
+    # AUR phase: one package at a time so one failure never blocks the rest.
+    echo "> Installing AUR packages (one-by-one)..."
+    for p in $aur_pkgs; do
+        if yay -S --needed --noconfirm "$p"; then
+            echo "  OK: $p"
+        else
+            echo "  FAILED (continuing): $p" >&2
+        fi
     done
 fi
