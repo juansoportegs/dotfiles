@@ -4,8 +4,8 @@
 #
 # Usage:
 #   ./install.sh             # symlink configs only (safe, no-op if re-run)
-#   ./install.sh --full      # symlink configs + install yay + all packages
-#   ./install.sh --packages  # package step only (yay + packages.txt)
+#   ./install.sh --full      # symlink configs + CachyOS/Chaotic repos + yay + all packages
+#   ./install.sh --packages  # package step only (repos + yay + packages.txt)
 #
 # NOTE: --full/--packages are for a FRESH system. On an existing install
 # the package step re-resolves every package against repo priority, which
@@ -55,8 +55,39 @@ done
 echo "Configs linked from $REPO."
 fi
 
+setup_cachyos() {
+    if grep -qE '^[[:space:]]*\[cachyos' /etc/pacman.conf 2>/dev/null; then
+        echo "CachyOS repos already configured."
+        return 0
+    fi
+    echo "Adding CachyOS repositories (auto-detects CPU) - kernel/prebuilt binaries become available..."
+    cd /tmp || exit 1
+    curl -L https://mirror.cachyos.org/cachyos-repo.tar.xz -o cachyos-repo.tar.xz
+    tar xf cachyos-repo.tar.xz
+    (cd cachyos-repo && yes | sudo ./cachyos-repo.sh)
+}
+
+setup_chaotic() {
+    if grep -q '^\[chaotic-aur\]' /etc/pacman.conf 2>/dev/null; then
+        echo "Chaotic-AUR already configured."
+        return 0
+    fi
+    echo "Adding Chaotic-AUR repository..."
+    sudo pacman-key --recv-key FBA220DFC880C036 --keyserver keyserver.ubuntu.com
+    sudo pacman-key --lsign-key FBA220DFC880C036
+    sudo pacman -U --noconfirm \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+    printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' | sudo tee -a /etc/pacman.conf >/dev/null
+}
+
 if [ "$DO_PACKAGES" -eq 1 ]; then
     echo "Installing packages (fresh-system mode)..."
+    echo "> Setting up CachyOS + Chaotic-AUR repos so kernels and binaries come PREBUILT (no AUR compilation)..."
+    setup_cachyos
+    setup_chaotic
+    echo "> Full system upgrade to prebuilt CachyOS packages..."
+    sudo pacman -Syu --noconfirm
     if ! command -v yay >/dev/null 2>&1; then
         echo "Installing yay..."
         if ! command -v makepkg >/dev/null 2>&1; then

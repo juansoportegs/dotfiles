@@ -41,12 +41,15 @@ B) FRESH INSTALL - RECOVERY
      git config --global user.email "juan.soporte@gscontrol.es"
 
 5. Manual one-time bits the script cannot do:
-     - Add CachyOS/Chaotic repos to /etc/pacman.conf
-       (needed for auto-cpufreq / gaming packages)
      - Generate a new SSH key and add it to GitHub:
          ssh-keygen -t ed25519
      - Re-add your SSH remmina connections (passwords live in
        ~/.local/share/remmina, intentionally not in this repo)
+
+NOTE: --full/--packages now automatically add the CachyOS + Chaotic-AUR
+repos (from the official wiki) BEFORE installing packages. This matters
+on plain Arch installs: without those repos, yay would build
+linux-cachyos / -headers / -rc from AUR SOURCE and compile kernels.
 
 After log out/in, hyprland, waybar, themes, scripts and wallpapers
 are live. Any changes afterwards follow workflow A.
