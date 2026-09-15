@@ -106,13 +106,55 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
     else
         echo "yay already installed."
     fi
-    echo "Installing packages from packages.txt (--needed)..."
-    echo "> Clearing conflicting JACK stacks so pipewire-jack can replace them..."
-    for p in jack jack2 jack-dbus jack2-dbus pipewire-jack lib32-jack lib32-jack2 lib32-pipewire-jack; do
-        if pacman -Q "$p" >/dev/null 2>&1; then
-            echo "  removing $p"
-            sudo pacman -Rdd --noconfirm "$p" || true
-        fi
+    # Pre-emptive pass: for any target that declares Conflicts With an
+    # installed non-target package (e.g. mesa-git vs mesa), remove it now.
+    echo "> Resolving package-list conflicts..."
+    for pkg in $(cat "$REPO/packages.txt"); do
+        conflicts=$(pacman -Si --color never "$pkg" 2>/dev/null | awk '
+            /^[Cc]onflicts[ \t]*[Ww]ith?[ \t]*:/ {
+                sub(/^[^:]*:[ \t]*/, ""); buf=$0; inconf=1; next
+            }
+            inconf && /^[ \t]+[A-Za-z0-9]/ { buf=buf " " $0; next }
+            inconf { print buf; inconf=0 }
+            END { if (inconf) print buf }
+        ')
+        [ -z "$conflicts" ] && continue
+        for c in $conflicts; do
+            c="${c%%[<>=]*}"
+            [ "$c" = "None" ] && continue
+            if pacman -Q "$c" >/dev/null 2>&1 && ! grep -qx "$c" "$REPO/packages.txt"; then
+                echo "  removing $c (conflicts with $pkg)"
+                sudo pacman -Rdd --noconfirm "$c" || true
+            fi
+        done
     done
-    yay -S --needed --noconfirm $(cat "$REPO/packages.txt")
+
+    # Main pass with retries: if pacman reports "X and Y are in conflict.
+    # Remove Y?", remove exactly what it suggests and retry. Catches
+    # dependency-level conflicts (e.g. steam pulling lib32-mesa-git).
+    echo "> Installing packages.txt (--needed)..."
+    attempts=0
+    while :; do
+        attempts=$((attempts + 1))
+        echo "  attempt $attempts..."
+        out=$(yay -S --needed --noconfirm $(cat "$REPO/packages.txt") 2>&1)
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            echo "$out" | tail -5
+            echo "  all packages satisfied."
+            break
+        fi
+        echo "$out" | tail -25
+        to_remove=$(printf '%s\n' "$out" | grep -oE 'Remove [^?]+' | awk '{print $2}' | sort -u)
+        if [ -z "$to_remove" ] || [ "$attempts" -ge 6 ]; then
+            echo "  Cannot auto-resolve (no pacman-suggested removal). Fix manually." >&2
+            exit 1
+        fi
+        for r in $to_remove; do
+            if pacman -Q "$r" >/dev/null 2>&1; then
+                echo "  removing $r (pacman-suggested)"
+                sudo pacman -Rdd --noconfirm "$r" || true
+            fi
+        done
+    done
 fi
