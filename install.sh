@@ -107,5 +107,12 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
         echo "yay already installed."
     fi
     echo "Installing packages from packages.txt (--needed)..."
+    echo "> Clearing conflicting JACK stacks so pipewire-jack can replace them..."
+    for p in jack jack2 jack-dbus jack2-dbus pipewire-jack lib32-jack lib32-jack2 lib32-pipewire-jack; do
+        if pacman -Q "$p" >/dev/null 2>&1; then
+            echo "  removing $p"
+            sudo pacman -Rdd --noconfirm "$p" || true
+        fi
+    done
     yay -S --needed --noconfirm $(cat "$REPO/packages.txt")
 fi
