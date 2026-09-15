@@ -72,9 +72,17 @@ setup_chaotic() {
         echo "Chaotic-AUR already configured."
         return 0
     fi
-    echo "Adding Chaotic-AUR repository..."
-    sudo pacman-key --recv-key FBA220DFC880C036 --keyserver keyserver.ubuntu.com
-    sudo pacman-key --lsign-key FBA220DFC880C036
+    # Verified 2026-09: the current chaotic-keyring/mirrorlist pkg.zip files
+    # are signed with key BFB13EA507EFDADB64A944813A40CB5E7E5CBC30 (NOT the
+    # old FBA220DFC880C036 that some guides still paste).
+    KEY="BFB13EA507EFDADB64A944813A40CB5E7E5CBC30"
+    echo "Adding Chaotic-AUR repository (key $KEY)..."
+    for ks in "keyserver.ubuntu.com" "hkps://keys.openpgp.org"; do
+        if sudo pacman-key --recv-key "$KEY" --keyserver "$ks"; then
+            break
+        fi
+    done
+    sudo pacman-key --lsign-key "$KEY"
     sudo pacman -U --noconfirm \
         'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
         'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
